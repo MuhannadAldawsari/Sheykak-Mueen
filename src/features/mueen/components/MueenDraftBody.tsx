@@ -1,11 +1,13 @@
 /**
  * The bordered, scrollable draft box of the Mu'een sheet: loading skeleton,
- * error / empty states, or the editable paragraphs with their citation pills.
+ * error / empty / no-draft states, or the editable paragraphs with their citation
+ * pills (under a review banner when the service flags the draft).
  * Each paragraph is its own TextInput, so an edit never detaches a sentence
  * from its sources ("المراجع تبقى مرتبطة بجملها").
  */
 import React from "react";
 import { ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui/AppText";
 import { AppButton } from "@/components/ui/AppButton";
 import { SkeletonBar } from "@/components/SkeletonLoader";
@@ -23,6 +25,8 @@ export function MueenDraftBody({
   loading,
   error,
   empty,
+  notice,
+  flagged,
   activeParagraphId,
   onChangeText,
   onOpenSources,
@@ -32,6 +36,10 @@ export function MueenDraftBody({
   loading: boolean;
   error: boolean;
   empty: boolean;
+  /** The service's note for the scholar (Arabic), if any. */
+  notice: string | null;
+  /** Show the note as a banner over the paragraphs (unverified draft or a personal case). */
+  flagged: boolean;
   activeParagraphId: string | null;
   onChangeText: (paragraphId: string, text: string) => void;
   onOpenSources: (paragraph: MueenParagraph) => void;
@@ -67,8 +75,36 @@ export function MueenDraftBody({
         <AppButton label={t("sheet.retry")} variant="secondary" size="sm" onPress={onRetry} />
       </View>
     );
+  } else if (paragraphs.length === 0) {
+    // The service drafted nothing (no approved evidence, or out of scope): say why.
+    content = (
+      <View style={s.errorWrap}>
+        <AppText role="subhead" style={[s.status, { color: c.textMuted }]}>
+          {t("sheet.noDraft")}
+        </AppText>
+        {notice ? (
+          <AppText role="footnote" style={[s.status, { color: c.textDim }]}>
+            {notice}
+          </AppText>
+        ) : null}
+      </View>
+    );
   } else {
-    content = paragraphs.map((p, index) => (
+    const banner =
+      flagged && notice ? (
+        <View key="notice" style={[s.banner, { backgroundColor: c.mueenTint, borderColor: c.mueenBorder }]}>
+          <View style={s.bannerTitle}>
+            <Ionicons name="alert-circle-outline" size={16} color={c.mueen} />
+            <AppText role="footnote" style={[s.bannerHeading, { color: c.mueen }]}>
+              {t("sheet.reviewNotice")}
+            </AppText>
+          </View>
+          <AppText role="footnote" style={[s.bannerText, { color: c.text }]}>
+            {notice}
+          </AppText>
+        </View>
+      ) : null;
+    const items = paragraphs.map((p, index) => (
       <View key={p.id} style={s.paragraph}>
         <TextInput
           value={p.text}
@@ -92,6 +128,7 @@ export function MueenDraftBody({
         ) : null}
       </View>
     ));
+    content = banner ? [banner, ...items] : items;
   }
 
   return (
@@ -126,4 +163,8 @@ const s = StyleSheet.create({
   skeleton: { gap: 10 },
   status: { textAlign: "center" },
   errorWrap: { alignItems: "center", gap: space.md, paddingVertical: space.lg },
+  banner: { borderWidth: 1, borderRadius: radius.md, padding: space.md, gap: 6 },
+  bannerTitle: { flexDirection: "row", alignItems: "center", gap: 6 },
+  bannerHeading: { fontWeight: "600", textAlign: "auto" },
+  bannerText: { textAlign: "auto", writingDirection: "auto" },
 });

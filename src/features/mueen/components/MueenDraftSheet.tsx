@@ -76,6 +76,8 @@ export function MueenDraftSheet({
   const sourceCount = paragraphs ? countDistinctSources(paragraphs) : 0;
   const hasText = !!paragraphs?.some((p) => p.text.trim());
   const canSend = !!draft && !loading && hasText && confirmed && !sending;
+  const notice = draft?.notice?.trim() || null;
+  const flagged = !!draft && (draft.status === "unverified" || draft.level === "D");
 
   // Fixed-height sheet that shrinks as the keyboard rises, so its top stays put.
   const baseHeight = height - insets.top - 48;
@@ -157,6 +159,8 @@ export function MueenDraftSheet({
             loading={loading}
             error={error}
             empty={empty}
+            notice={notice}
+            flagged={flagged}
             activeParagraphId={citation?.id ?? null}
             onChangeText={(id, text) => setEdits((prev) => ({ ...prev, [id]: text }))}
             onOpenSources={setCitation}

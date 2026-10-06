@@ -34,6 +34,7 @@ function toSource(raw: any, index: number): MueenSource | null {
     attribution: typeof raw.attribution === "string" ? raw.attribution : undefined,
     grade: raw.grade === "sahih" || raw.grade === "hasan" || raw.grade === "daif" ? raw.grade : null,
     url: typeof raw.url === "string" ? raw.url : undefined,
+    translation: typeof raw.translation === "string" ? raw.translation : undefined,
   };
 }
 
