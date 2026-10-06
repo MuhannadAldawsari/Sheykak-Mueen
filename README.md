@@ -4,7 +4,7 @@ Mu'een (معين الداعية, "the preacher's helper") is the AI answer assis
 
 This repo holds the Mu'een feature module extracted from the Sheykak mobile app (React Native / Expo). It is a drop-in module, **not a standalone app**: the code imports shared modules of the app (theme, i18n, UI primitives, chat), which are not included here.
 
-**Status:** the UI is complete and runs against a mock service. The RAG model is not connected yet.
+**Status:** the UI is complete and connected to the Mu'een service through a Supabase Edge Function (`mueen-draft`). Set `EXPO_PUBLIC_MUEEN_MOCK=1` to use the offline sample answer instead.
 
 ## The flow (7 screens)
 
@@ -23,7 +23,7 @@ This repo holds the Mu'een feature module extracted from the Sheykak mobile app 
 ## What's here
 
 ```
-src/features/mueen/     types, payload codec, mock service, hooks, components, tests
+src/features/mueen/     types, payload codec, live + mock services, hooks, components, tests
 src/locales/{ar,en}/    mueen.json strings (namespace "mueen")
 assets/images/mueen/    the Mu'een book icon (SVG, uses currentColor)
 database/               migration that allows message_type = 'mueen' (scholars only)
@@ -52,7 +52,17 @@ generateDraft(request: MueenDraftRequest): Promise<MueenDraft>
 - **Request:** the question (title, description), the text messages of the conversation (oldest first, each flagged `fromAsker`), and the scope: the whole conversation or a list of picked message ids.
 - **Response:** `paragraphs`, each `{ id, text, sources[] }`. A source has a `kind` (`quran` | `dorar` | `shamela` | `other`), a `collection` name, and optionally `reference`, `quote`, `attribution`, `grade` (`sahih` | `hasan` | `daif`) and `url`.
 
-Today [`api/index.ts`](src/features/mueen/api/index.ts) exports the mock in [`api/mock-service.ts`](src/features/mueen/api/mock-service.ts), which returns the sample answer from the design. To go live, export a real client there instead; nothing else changes.
+[`api/index.ts`](src/features/mueen/api/index.ts) exports the live client in [`api/http-service.ts`](src/features/mueen/api/http-service.ts): it calls the Supabase Edge Function `mueen-draft` with the scholar's session, and the function (which holds the Mu'een API key, never shipped in the app) forwards the request to the Mu'een API's `POST /mueen/draft`. A draft takes about 30-60 seconds. Errors arrive as `MueenDraftError` with a `code` (`unauthorized`, `forbidden`, `no_input`, `timeout`, `network`, `unavailable`); only `network` is retried.
+
+The live service also sends optional fields the mock does not: `status` (`ok` · `unverified` · `abstain` · `refer`), `level` (`A`-`D`), `notice` (an Arabic note for the scholar), `reviewPoints`, and `translation` on a source. The sheet uses them for:
+
+- **No draft** (`abstain` / `refer`, empty `paragraphs`): the sheet says Mu'een did not draft an answer and shows the notice; the chip says so too. Send stays disabled.
+- **Review banner** (`unverified`, or `level: "D"` for a personal case drafted from general evidence only): the notice is shown above the paragraphs.
+- **Translations:** the citations sheet shows a source's approved translation under the quote, and sent answers keep it.
+
+Hadith from HadeethEnc arrive as `kind: "other"` with a `grade`; Shamela books as `kind: "shamela"`.
+
+The mock in [`api/mock-service.ts`](src/features/mueen/api/mock-service.ts) still returns the sample answer from the design.
 
 ## Message format
 
@@ -70,7 +80,7 @@ See [INTEGRATION.md](INTEGRATION.md).
 
 ## Tests
 
-`src/features/mueen/__tests__/` (Jest): the payload codec and the mock service. They run inside the app's `jest-expo` setup.
+`src/features/mueen/__tests__/` (Jest): the payload codec, the mock service and the live client (error mapping). They run inside the app's `jest-expo` setup.
 
 ## License
 

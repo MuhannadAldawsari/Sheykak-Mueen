@@ -19,11 +19,14 @@ export function MueenDraftChip({
   loading,
   error,
   sourceCount,
+  noDraft = false,
   onPress,
 }: {
   loading: boolean;
   error: boolean;
   sourceCount: number;
+  /** The service answered without a draft (nothing in the approved sources / out of scope). */
+  noDraft?: boolean;
   onPress: () => void;
 }) {
   const c = useTheme();
@@ -33,7 +36,9 @@ export function MueenDraftChip({
     ? t("chip.loading")
     : error
       ? t("chip.error")
-      : t("chip.ready", { sources: t("sources", { count: sourceCount, n: fmt.number(sourceCount) }) });
+      : noDraft
+        ? t("chip.noDraft")
+        : t("chip.ready", { sources: t("sources", { count: sourceCount, n: fmt.number(sourceCount) }) });
 
   return (
     <Animated.View entering={FadeInDown.duration(180)} exiting={FadeOut.duration(120)} style={s.wrap}>

@@ -68,6 +68,12 @@ Source badges (same in both themes): Quran `#255A4C`, Dorar `#C9A84C`, Shamela `
 
 The draft sheet scrolls vertically, so it needs swipe-down-to-dismiss turned off. Add an optional `dragToDismiss` prop (default `true`) to the shared bottom sheet and disable the pan gesture when it is `false`.
 
+## 8. Mu'een service
+
+- The Supabase Edge Function `mueen-draft` must be deployed with its secrets (`MUEEN_API_URL`, `MUEEN_API_KEY`); the app calls it with `supabase.functions.invoke`.
+- `EXPO_PUBLIC_MUEEN_MOCK=1` switches back to the sample answer (UI work without the service).
+- The chip drafts automatically when a scholar opens a question that needs an answer, so every such open runs the model once (about 30-60 s). Keep that in mind for the model provider's quota.
+
 ## Checks
 
 `tsc --noEmit`, `jest`, and the i18n parity check (`ar` and `en` must have the same keys, including all six Arabic plural forms).

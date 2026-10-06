@@ -48,6 +48,14 @@ describe("mueen payload", () => {
     expect(decoded?.paragraphs[0].sources[0]).toMatchObject({ kind: "other", grade: null });
   });
 
+  it("keeps a source's approved translation", () => {
+    const withTranslation: MueenParagraph[] = [
+      { id: "p1", text: "نص", sources: [{ ...quran, quote: "﴿...﴾", translation: "..." }] },
+    ];
+    const decoded = decodeMueenAnswer(encodeMueenAnswer("d", withTranslation));
+    expect(decoded?.paragraphs[0].sources[0].translation).toBe("...");
+  });
+
   it("counts a source cited by two paragraphs once", () => {
     expect(countDistinctSources(paragraphs)).toBe(2);
   });

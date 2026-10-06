@@ -219,6 +219,7 @@ export function useMueen({
         loading={allDraft.isLoading}
         error={allDraft.isError}
         sourceCount={chipSources}
+        noDraft={!!allDraft.draft && allDraft.draft.paragraphs.length === 0}
         onPress={() => {
           if (allDraft.isError) allDraft.regenerate();
           openSheet(ALL);

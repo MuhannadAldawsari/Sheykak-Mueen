@@ -25,6 +25,8 @@ export interface MueenSource {
   attribution?: string;
   grade?: MueenGrade | null;
   url?: string;
+  /** Approved translation of the quote, for askers who don't read Arabic. */
+  translation?: string;
 }
 
 export interface MueenParagraph {
@@ -32,6 +34,15 @@ export interface MueenParagraph {
   text: string;
   sources: MueenSource[];
 }
+
+/**
+ * How the draft came out. "unverified": it failed the automatic checks (shown, flagged);
+ * "abstain" / "refer": no draft — nothing in the approved sources, or out of scope.
+ */
+export type MueenDraftStatus = "ok" | "unverified" | "abstain" | "refer";
+
+/** Sensitivity level: A settled · B explanation · C disputed · D a personal case. */
+export type MueenLevel = "A" | "B" | "C" | "D";
 
 /** What the draft was built from: the whole conversation or picked messages. */
 export type MueenScope =
@@ -45,6 +56,13 @@ export interface MueenDraft {
   paragraphs: MueenParagraph[];
   /** Text messages the model read (the "· 3 رسائل نصية" hint). */
   textMessageCount: number;
+  /** Set by the live service (absent in the mock). */
+  status?: MueenDraftStatus;
+  level?: MueenLevel;
+  /** Arabic note for the scholar: approach, warnings, or why there is no draft. */
+  notice?: string;
+  /** Claims the automatic checks asked the scholar to review. */
+  reviewPoints?: string[];
 }
 
 /** Stored in `messages.content` for `message_type = "mueen"`. */

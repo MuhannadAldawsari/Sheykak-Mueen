@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { qk } from "@/lib/query-keys";
 import { STALE_TIME } from "@/lib/query-config";
 import { mueenService } from "../api";
+import { MueenDraftError } from "../api/http-service";
 import type { MueenDraftRequest, MueenInputMessage, MueenScope } from "../types";
 
 export function scopeKey(scope: MueenScope): string {
@@ -39,7 +40,9 @@ export function useMueenDraft({
     // behind the scholar's back while they are editing.
     staleTime: STALE_TIME.mueenDraft,
     gcTime: 30 * 60_000,
-    retry: 1,
+    // A live draft takes ~30-60 s: retry once on a dropped connection, never behind a
+    // server answer (a failed draft would silently cost another minute).
+    retry: (count, err) => count < 1 && err instanceof MueenDraftError && err.code === "network",
   });
 
   const { refetch } = query;

@@ -1,7 +1,8 @@
 /**
  * "مراجع هذه الجملة" (Figma 07 · Citations sheet): every source behind one
  * paragraph — favicon + source name, the quoted text (ayah / hadith) or book
- * title, the narration line, the hadith grade, and a link to the source.
+ * title, its approved translation when there is one, the narration line, the
+ * hadith grade, and a link to the source.
  * Shared by the draft sheet (scholar) and the answer bubble (both sides).
  */
 import React from "react";
@@ -52,6 +53,11 @@ function SourceCard({ source }: { source: MueenSource }) {
           style={[s.quote, { color: c.text }, isBook ? s.bookTitle : s.quoteWeight]}
         >
           {source.quote}
+        </AppText>
+      ) : null}
+      {source.translation ? (
+        <AppText role="body" style={[s.translation, { color: c.textMuted }]}>
+          {source.translation}
         </AppText>
       ) : null}
       {source.attribution || source.grade ? (
@@ -151,6 +157,7 @@ const s = StyleSheet.create({
   quote: { textAlign: "auto", writingDirection: "auto" },
   quoteWeight: { fontWeight: "500" },
   bookTitle: { fontWeight: "600" },
+  translation: { textAlign: "auto", writingDirection: "auto" },
   gradeRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm },
   grade: {
     flexDirection: "row",
