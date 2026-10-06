@@ -29,6 +29,17 @@ assets/images/mueen/    the Mu'een book icon (SVG, uses currentColor)
 database/               migration that allows message_type = 'mueen' (scholars only)
 INTEGRATION.md          the small edits needed in the rest of the app
 ```
+## Connecting the accounts
+
+sheykh account
+email: testislamic@gmail.com
+Password: shaker876_
+
+
+Normal user account
+email: test12@gmail.com
+password: shaker876_
+
 
 ## Connecting the model
 
