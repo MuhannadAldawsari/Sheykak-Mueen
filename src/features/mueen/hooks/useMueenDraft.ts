@@ -1,15 +1,20 @@
 /**
  * Fetches (and caches per question + scope) the Mu'een draft. The draft is
  * generated once per scope and kept for the session — regenerate() asks the
- * service for a fresh one. Local paragraph edits live in the sheet, not here.
+ * service for a fresh one. Local paragraph edits live in useMueen, not here.
  */
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { qk } from "@/lib/query-keys";
 import { STALE_TIME } from "@/lib/query-config";
 import { mueenService } from "../api";
-import { MueenDraftError } from "../api/http-service";
-import type { MueenDraftRequest, MueenInputMessage, MueenScope } from "../types";
+import { numberCitations } from "../citations";
+import {
+  MueenDraftError,
+  type MueenDraftRequest,
+  type MueenInputMessage,
+  type MueenScope,
+} from "../types";
 
 export function scopeKey(scope: MueenScope): string {
   return scope.kind === "all" ? "all" : [...scope.messageIds].sort().join(",");
@@ -33,16 +38,21 @@ export function useMueenDraft({
 
   const query = useQuery({
     queryKey: key,
-    queryFn: () =>
-      mueenService.generateDraft({ questionId: questionId!, question, messages, scope }),
+    // Inline markers become card numbers once, here: edits and the sent answer keep them.
+    queryFn: async () => {
+      const draft = await mueenService.generateDraft({ questionId: questionId!, question, messages, scope });
+      return { ...draft, paragraphs: draft.paragraphs.map(numberCitations) };
+    },
     enabled: enabled && !!questionId && hasInput,
     // A draft is a one-off generation, not server state: never refetch it
     // behind the scholar's back while they are editing.
     staleTime: STALE_TIME.mueenDraft,
     gcTime: 30 * 60_000,
-    // A live draft takes ~30-60 s: retry once on a dropped connection, never behind a
-    // server answer (a failed draft would silently cost another minute).
-    retry: (count, err) => count < 1 && err instanceof MueenDraftError && err.code === "network",
+    // Offline won't fix itself in a second, and a timed-out draft already took
+    // minutes; the sheet offers a retry instead.
+    retry: (count, error) =>
+      count < 1 &&
+      !(error instanceof MueenDraftError && (error.kind === "offline" || error.message === "timeout")),
   });
 
   const { refetch } = query;
@@ -50,10 +60,20 @@ export function useMueenDraft({
     void refetch();
   }, [refetch]);
 
+  const error = query.error;
+  const isError = query.isError && !query.isFetching;
   return {
     draft: query.data ?? null,
-    isLoading: query.isFetching,
-    isError: query.isError && !query.isFetching,
+    /** Fetching with nothing to show yet (first generation). */
+    isLoading: query.isFetching && !query.data,
+    /** Fetching a replacement for a draft already on screen (screen 14). */
+    isRegenerating: query.isFetching && !!query.data,
+    isError,
+    errorKind: isError
+      ? error instanceof MueenDraftError
+        ? error.kind
+        : "failed"
+      : null,
     hasInput,
     regenerate,
   };

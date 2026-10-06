@@ -10,7 +10,16 @@ import type {
   MueenSourceKind,
 } from "./types";
 
-const KINDS: readonly MueenSourceKind[] = ["quran", "dorar", "shamela", "other"];
+const KINDS: readonly MueenSourceKind[] = ["quran", "hadith", "tafsir", "aqeedah", "dawah", "book", "other"];
+
+/** v1 answers named sources by site; they still decode into v2 kinds. */
+const LEGACY_KINDS: Record<string, MueenSourceKind> = { dorar: "hadith", shamela: "book" };
+
+function toKind(raw: unknown): MueenSourceKind {
+  if (typeof raw !== "string") return "other";
+  if ((KINDS as readonly string[]).includes(raw)) return raw as MueenSourceKind;
+  return LEGACY_KINDS[raw] ?? "other";
+}
 
 export function encodeMueenAnswer(draftId: string, paragraphs: MueenParagraph[]): string {
   const payload: MueenAnswerPayload = {
@@ -27,14 +36,13 @@ function toSource(raw: any, index: number): MueenSource | null {
   if (!raw || typeof raw.collection !== "string") return null;
   return {
     id: typeof raw.id === "string" ? raw.id : `s${index}`,
-    kind: KINDS.includes(raw.kind) ? raw.kind : "other",
+    kind: toKind(raw.kind),
     collection: raw.collection,
     reference: typeof raw.reference === "string" ? raw.reference : undefined,
     quote: typeof raw.quote === "string" ? raw.quote : undefined,
     attribution: typeof raw.attribution === "string" ? raw.attribution : undefined,
     grade: raw.grade === "sahih" || raw.grade === "hasan" || raw.grade === "daif" ? raw.grade : null,
     url: typeof raw.url === "string" ? raw.url : undefined,
-    translation: typeof raw.translation === "string" ? raw.translation : undefined,
   };
 }
 

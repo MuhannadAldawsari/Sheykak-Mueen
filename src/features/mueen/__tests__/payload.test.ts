@@ -7,10 +7,10 @@ import {
 } from "../payload";
 import type { MueenParagraph } from "../types";
 
-const quran = { id: "q1", kind: "quran" as const, collection: "القرآن", reference: "مريم 30" };
+const quran = { id: "q1", kind: "quran" as const, collection: "سورة مريم", reference: "مريم 30" };
 const hadith = {
   id: "d1",
-  kind: "dorar" as const,
+  kind: "hadith" as const,
   collection: "الدرر السنية · الموسوعة الحديثية",
   quote: "«...»",
   grade: "sahih" as const,
@@ -27,7 +27,7 @@ describe("mueen payload", () => {
     const decoded = decodeMueenAnswer(encodeMueenAnswer("draft-1", paragraphs));
     expect(decoded?.draftId).toBe("draft-1");
     expect(decoded?.paragraphs.map((p) => p.text)).toEqual(["الفقرة الأولى", "الفقرة الثانية"]);
-    expect(decoded?.paragraphs[1].sources[0]).toMatchObject({ kind: "dorar", grade: "sahih" });
+    expect(decoded?.paragraphs[1].sources[0]).toMatchObject({ kind: "hadith", grade: "sahih" });
   });
 
   it("rejects plain text, wrong versions and empty answers", () => {
@@ -37,23 +37,24 @@ describe("mueen payload", () => {
     expect(decodeMueenAnswer(null)).toBeNull();
   });
 
+  it("decodes v1 answers whose sources were named by site", () => {
+    const raw = JSON.stringify({
+      v: 1,
+      draftId: "old",
+      paragraphs: [{ text: "x", sources: [{ collection: "c", kind: "dorar" }, { collection: "c", kind: "shamela" }] }],
+    });
+    expect(decodeMueenAnswer(raw)?.paragraphs[0].sources.map((s) => s.kind)).toEqual(["hadith", "book"]);
+  });
+
   it("sanitizes unknown source kinds and grades", () => {
     const raw = JSON.stringify({
       v: 1,
       draftId: "d",
-      paragraphs: [{ text: "x", sources: [{ collection: "c", kind: "tafsir", grade: "strong" }, { nope: 1 }] }],
+      paragraphs: [{ text: "x", sources: [{ collection: "c", kind: "fatwa", grade: "strong" }, { nope: 1 }] }],
     });
     const decoded = decodeMueenAnswer(raw);
     expect(decoded?.paragraphs[0].sources).toHaveLength(1);
     expect(decoded?.paragraphs[0].sources[0]).toMatchObject({ kind: "other", grade: null });
-  });
-
-  it("keeps a source's approved translation", () => {
-    const withTranslation: MueenParagraph[] = [
-      { id: "p1", text: "نص", sources: [{ ...quran, quote: "﴿...﴾", translation: "..." }] },
-    ];
-    const decoded = decodeMueenAnswer(encodeMueenAnswer("d", withTranslation));
-    expect(decoded?.paragraphs[0].sources[0].translation).toBe("...");
   });
 
   it("counts a source cited by two paragraphs once", () => {

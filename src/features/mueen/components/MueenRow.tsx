@@ -1,9 +1,10 @@
 /**
  * Wraps one chat row for Mu'een. Normal mode: adds the "Mu'een can't analyze
- * voice / images yet" caption under the asker's media (Figma 01). Selection
- * mode (03): the asker's text messages and the question card become
- * tappable rows with a check circle; everything else is dimmed.
- * Reads state from MueenContext, so the chat's renderItem stays stable.
+ * voice / images yet" caption under the asker's media (Figma v2 · 01).
+ * Selection mode (03): text messages — the asker's, the scholar's own (as
+ * context) and the question card — get a selection circle; voice, images
+ * and everything else are dimmed. Reads MueenContext, so the chat's
+ * renderItem stays stable.
  */
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -11,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/use-theme";
 import { useT } from "@/i18n/useT";
 import { haptics } from "@/lib/haptics";
+import { palette } from "@/constants/palette";
 import { radius, space } from "@/constants/layout";
 import { typography } from "@/constants/typography";
 import { fileNameFromUrl, isImageFile } from "@/shared/utils/file-types";
@@ -28,9 +30,18 @@ function unsupportedKind(message: MessageWithSender): "audio" | "image" | "file"
   return isImageFile(name) ? "image" : "file";
 }
 
-/** Only the asker's own text (and the question itself) can be drafted from. */
-export function isMueenSelectable(message: MessageWithSender): boolean {
+/** The asker's own text: where «للرد مع مُعين» is offered (Spec · Message menus). */
+export function isAskerText(message: MessageWithSender): boolean {
   return message.sender_type === "user" && message.message_type === "text" && !message.is_deleted;
+}
+
+/** Selectable as draft input: any text message (the scholar's own is context). */
+export function isMueenSelectable(message: MessageWithSender): boolean {
+  return (
+    (message.sender_type === "user" || message.sender_type === "scholar") &&
+    message.message_type === "text" &&
+    !message.is_deleted
+  );
 }
 
 export function MueenRow({
@@ -49,8 +60,8 @@ export function MueenRow({
   const unsupported = message ? unsupportedKind(message) : null;
   const caption = unsupported ? (
     <View style={s.caption}>
-      <Ionicons name="information-circle-outline" size={12} color={c.textDim} />
-      <Text style={[s.captionText, { color: c.textDim }]}>{t(`unsupported.${unsupported}`)}</Text>
+      <Ionicons name="alert-circle-outline" size={12} color={c.mueenDim} />
+      <Text style={[s.captionText, { color: c.mueenDim }]}>{t(`unsupported.${unsupported}`)}</Text>
     </View>
   ) : null;
 
@@ -77,13 +88,13 @@ export function MueenRow({
       }}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected, disabled: !selectable }}
-      style={[s.row, selected && { backgroundColor: c.mueenTint }]}
+      style={s.row}
     >
       {selectable ? (
         <View
           style={[
             s.check,
-            selected ? { backgroundColor: c.mueen, borderWidth: 0 } : { borderColor: c.textMuted },
+            selected ? { backgroundColor: c.mueen, borderWidth: 0 } : { borderColor: palette.mueenCheckOff },
           ]}
         >
           {selected ? <Ionicons name="checkmark" size={14} color={c.inkOnBrand} /> : null}
@@ -124,10 +135,10 @@ const s = StyleSheet.create({
   caption: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 6,
-    marginTop: -6,
+    marginTop: -5,
     marginBottom: space.sm,
   },
-  captionText: { ...typography.caption, fontWeight: "400", textAlign: "auto" },
+  captionText: { ...typography.caption, textAlign: "auto" },
 });

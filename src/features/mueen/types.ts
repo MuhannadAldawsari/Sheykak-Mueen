@@ -6,27 +6,34 @@
  * whose `content` is a JSON MueenAnswerPayload (same pattern as call logs).
  */
 
-/** Chip badge per source family: ق Quran, د Dorar (hadith), ش Shamela (books). */
-export type MueenSourceKind = "quran" | "dorar" | "shamela" | "other";
+/**
+ * Source type (Figma "Spec · Source cards"); each has its pill colour and
+ * letter: ق Quran · د hadith · ت tafsir · ع aqeedah · م da'wah topic · ش book.
+ */
+export type MueenSourceKind = "quran" | "hadith" | "tafsir" | "aqeedah" | "dawah" | "book" | "other";
 
-/** Hadith grading shown as a pill on the source card. */
+/** Hadith grading, shown as plain text on the source card. */
 export type MueenGrade = "sahih" | "hasan" | "daif";
 
 export interface MueenSource {
   id: string;
   kind: MueenSourceKind;
-  /** Source name, e.g. "القرآن" / "الدرر السنية · الموسوعة الحديثية". */
+  /**
+   * Where it comes from. Quran: the surah ("سورة مريم"); others: the source
+   * ("الدرر السنية · الموسوعة الحديثية", "المكتبة الشاملة").
+   */
   collection: string;
-  /** Short locator for the chip, e.g. "آل عمران 59". */
+  /** Short locator for the pill, e.g. "مريم 30". */
   reference?: string;
-  /** Quoted text (ayah / hadith) or the book title for a book source. */
+  /** Verbatim ayah / hadith text, or the title for a book / topic. */
   quote?: string;
-  /** Narration / location line, e.g. "رواه البخاري · كتاب أحاديث الأنبياء". */
+  /**
+   * Hadith/Quran/tafsir/aqeedah: the reference chain line ("رواه البخاري · …",
+   * "سورة مريم · الآية 30 · نص القرآن: مجمع الملك فهد"). Book/topic: a short description.
+   */
   attribution?: string;
   grade?: MueenGrade | null;
   url?: string;
-  /** Approved translation of the quote, for askers who don't read Arabic. */
-  translation?: string;
 }
 
 export interface MueenParagraph {
@@ -34,15 +41,6 @@ export interface MueenParagraph {
   text: string;
   sources: MueenSource[];
 }
-
-/**
- * How the draft came out. "unverified": it failed the automatic checks (shown, flagged);
- * "abstain" / "refer": no draft — nothing in the approved sources, or out of scope.
- */
-export type MueenDraftStatus = "ok" | "unverified" | "abstain" | "refer";
-
-/** Sensitivity level: A settled · B explanation · C disputed · D a personal case. */
-export type MueenLevel = "A" | "B" | "C" | "D";
 
 /** What the draft was built from: the whole conversation or picked messages. */
 export type MueenScope =
@@ -53,16 +51,11 @@ export interface MueenDraft {
   id: string;
   questionId: string;
   scope: MueenScope;
+  /** "no_sources": not enough approved references — never an unsourced draft. */
+  status: "ok" | "no_sources";
   paragraphs: MueenParagraph[];
   /** Text messages the model read (the "· 3 رسائل نصية" hint). */
   textMessageCount: number;
-  /** Set by the live service (absent in the mock). */
-  status?: MueenDraftStatus;
-  level?: MueenLevel;
-  /** Arabic note for the scholar: approach, warnings, or why there is no draft. */
-  notice?: string;
-  /** Claims the automatic checks asked the scholar to review. */
-  reviewPoints?: string[];
 }
 
 /** Stored in `messages.content` for `message_type = "mueen"`. */
@@ -86,9 +79,19 @@ export interface MueenDraftRequest {
   scope: MueenScope;
 }
 
+/** Why a draft could not be generated (screen 13 shows the offline case). */
+export class MueenDraftError extends Error {
+  constructor(public readonly kind: "offline" | "failed", message?: string) {
+    super(message ?? kind);
+    this.name = "MueenDraftError";
+  }
+}
+
 /**
  * The contract the RAG backend will implement. The UI only talks to this
  * interface, so swapping the mock for the real endpoint touches api/index.ts.
+ * Throw MueenDraftError for failures; return status "no_sources" when the
+ * approved references don't support an answer.
  */
 export interface MueenService {
   generateDraft(request: MueenDraftRequest): Promise<MueenDraft>;

@@ -12,8 +12,9 @@ import { supabase } from "@/lib/supabase";
 import { isOnline } from "@/lib/network";
 import { patchCachedMessage, replaceCachedMessage, upsertCachedMessage } from "@/lib/sqlite";
 import { sendMessage } from "@/shared/api/questions";
-import type { Message } from "@/shared/types/questions";
+import type { Message, MessageWithSender } from "@/shared/types/questions";
 import type { LocalMessage } from "@/features/chat/types";
+import { replaceOptimistic } from "@/features/chat/message-merge";
 import { useT } from "@/i18n/useT";
 import { encodeMueenAnswer } from "../payload";
 import type { MueenParagraph } from "../types";
@@ -35,7 +36,12 @@ export function useSendMueenAnswer({
   const [sending, setSending] = useState(false);
 
   const send = useCallback(
-    async (draftId: string, paragraphs: MueenParagraph[]): Promise<boolean> => {
+    async (
+      draftId: string,
+      paragraphs: MueenParagraph[],
+      /** The asker message this answer quotes (selected-messages drafts). */
+      quote?: MessageWithSender | null,
+    ): Promise<boolean> => {
       if (!questionId || !userId) return false;
       if (!(await isOnline())) {
         Toast.show({ type: "error", text1: t("sheet.offline") });
@@ -54,6 +60,11 @@ export function useSendMueenAnswer({
         content,
         message_type: "mueen",
         created_at: new Date().toISOString(),
+        reply_to_id: quote?.id,
+        reply_to_content: quote?.content,
+        reply_to_sender_name: quote?.sender_name,
+        reply_to_message_type: quote?.message_type,
+        reply_to_file_name: quote?.file_name,
         is_read: false,
         is_deleted: false,
         deleted_for: [],
@@ -68,7 +79,15 @@ export function useSendMueenAnswer({
       updateMessagesCache((list) => [optimistic, ...list]);
       void upsertCachedMessage(userId, optimistic);
 
-      const result = await sendMessage(supabase, questionId, content, "scholar", "mueen");
+      const result = await sendMessage(
+        supabase,
+        questionId,
+        content,
+        "scholar",
+        "mueen",
+        undefined,
+        quote?.id,
+      );
       setSending(false);
 
       if (result.success && result.message) {
@@ -85,8 +104,13 @@ export function useSendMueenAnswer({
           upload_state: "done",
           pending: false,
           failed: false,
+          reply_to_id: optimistic.reply_to_id,
+          reply_to_content: optimistic.reply_to_content,
+          reply_to_sender_name: optimistic.reply_to_sender_name,
+          reply_to_message_type: optimistic.reply_to_message_type,
+          reply_to_file_name: optimistic.reply_to_file_name,
         };
-        updateMessagesCache((list) => list.map((m) => (m.id === tempId ? resolved : m)));
+        updateMessagesCache((list) => replaceOptimistic(list, tempId, resolved));
         void replaceCachedMessage(userId, tempId, resolved);
         haptics.success();
         return true;

@@ -13,9 +13,10 @@ import type { MueenSource } from "../types";
 const shortName = (collection: string) => collection.split(" · ")[0];
 
 /**
- * Citation pill under a paragraph (Figma "Citation pill"): the first source's
- * favicon + "collection · reference", and "+N" when the paragraph has more.
- * Tapping opens the citations sheet for that paragraph.
+ * Citation pill under a paragraph (Figma "Citation Pill"): the first source's
+ * favicon + "القرآن · مريم 30" / "الدرر السنية", and "+N" when the paragraph
+ * has more. It is locked (not editable) and tapping opens that paragraph's
+ * citations sheet.
  */
 export function MueenSourceChip({
   sources,
@@ -31,9 +32,8 @@ export function MueenSourceChip({
   const fmt = useFormatter();
   const first = sources[0];
   if (!first) return null;
-  const base = first.reference
-    ? `${shortName(first.collection)} · ${first.reference}`
-    : shortName(first.collection);
+  const name = first.kind === "quran" ? t("kindShort.quran") : shortName(first.collection);
+  const base = first.reference ? `${name} · ${first.reference}` : name;
   const label = sources.length > 1 ? `${base} +${fmt.number(sources.length - 1)}` : base;
 
   return (
@@ -60,7 +60,7 @@ export function MueenSourceChip({
       <SourceFavicon kind={first.kind} />
       <Text
         numberOfLines={1}
-        style={[s.label, { color: active ? c.mueen : c.textMuted }]}
+        style={[s.label, { color: active ? c.mueen : c.mueenMuted }]}
       >
         {label}
       </Text>

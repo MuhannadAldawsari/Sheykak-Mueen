@@ -1,16 +1,19 @@
 /**
- * "مراجع هذه الجملة" (Figma 07 · Citations sheet): every source behind one
- * paragraph — favicon + source name, the quoted text (ayah / hadith) or book
- * title, its approved translation when there is one, the narration line, the
- * hadith grade, and a link to the source.
+ * "مراجع هذه الجملة" (Figma v2 · 08 / 25 / 26 · Citations sheet): every
+ * source behind one paragraph, as Source Cards — "النوع · المصدر" label with
+ * the type's favicon, the verbatim ayah / hadith (or book / topic title), the
+ * reference line (hadith grade as plain text), and an open-source button that
+ * shows "تعذّر فتح المصدر" when the browser can't open it.
  * Shared by the draft sheet (scholar) and the answer bubble (both sides).
  */
-import React from "react";
+import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { openBrowserAsync } from "expo-web-browser";
+import Toast from "react-native-toast-message";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
+import { ModalToast } from "@/components/ModalToast";
 import { AppText } from "@/components/ui/AppText";
 import { useTheme } from "@/hooks/use-theme";
 import { useT } from "@/i18n/useT";
@@ -19,59 +22,79 @@ import { haptics } from "@/lib/haptics";
 import { radius, space } from "@/constants/layout";
 import { typography } from "@/constants/typography";
 import { SourceFavicon } from "./SourceFavicon";
+import { sourceNumbers } from "../citations";
 import type { MueenParagraph, MueenSource } from "../types";
 
-function SourceCard({ source }: { source: MueenSource }) {
+/** Types whose card ends with a reference line; book / topic show a description. */
+const HAS_REFERENCE_LINE = new Set(["quran", "hadith", "tafsir", "aqeedah"]);
+
+function SourceCard({
+  source,
+  number,
+  toastOffset,
+}: {
+  source: MueenSource;
+  /** The «(n)» the paragraph text cites it by; null for Quran (cited by its reference). */
+  number: number | null;
+  toastOffset: number;
+}) {
   const c = useTheme();
   const { t } = useT("mueen");
-  const isBook = source.kind === "shamela";
+  const label = `${number !== null ? `(${number}) ` : ""}${t(`kind.${source.kind}`)} · ${source.collection}`;
+  const grade = source.kind === "hadith" && source.grade ? t(`grade.${source.grade}`) : null;
+  const referenceLine = [grade, source.attribution].filter(Boolean).join(" · ");
+
+  const open = async () => {
+    if (!source.url) return;
+    haptics.tap();
+    try {
+      await openBrowserAsync(source.url);
+    } catch {
+      haptics.error();
+      Toast.show({
+        type: "alert",
+        text1: t("toast.openFailed"),
+        position: "bottom",
+        bottomOffset: toastOffset,
+      });
+    }
+  };
+
   return (
     <View style={[s.card, { backgroundColor: c.backgroundAlt, borderColor: c.border }]}>
       <View style={s.sourceRow}>
         <SourceFavicon kind={source.kind} size={22} />
-        <Text style={[s.collection, { color: c.textMuted }]}>
-          {source.reference ? `${source.collection} · ${source.reference}` : source.collection}
-        </Text>
+        <Text style={[s.label, { color: c.textMuted }]}>{label}</Text>
         {source.url ? (
           <Pressable
-            onPress={() => {
-              haptics.tap();
-              void openBrowserAsync(source.url!);
-            }}
+            onPress={() => void open()}
             accessibilityRole="link"
             accessibilityLabel={t("citations.open")}
             hitSlop={4}
-            style={({ pressed }) => [s.openBtn, { backgroundColor: c.mueenChip }, pressed && s.pressed]}
+            style={({ pressed }) => [s.openBtn, { backgroundColor: c.mueenSoftFill }, pressed && s.pressed]}
           >
             <Ionicons name="open-outline" size={16} color={c.textMuted} />
           </Pressable>
         ) : null}
       </View>
       {source.quote ? (
-        <AppText
-          role={isBook ? "body" : "headline"}
-          style={[s.quote, { color: c.text }, isBook ? s.bookTitle : s.quoteWeight]}
+        source.kind === "quran" ? (
+          <Text style={[s.ayah, { color: c.text }]}>{source.quote}</Text>
+        ) : (
+          <AppText role="headline" style={[s.quote, { color: c.text }]}>
+            {source.quote}
+          </AppText>
+        )
+      ) : null}
+      {referenceLine ? (
+        <Text
+          style={[
+            HAS_REFERENCE_LINE.has(source.kind) ? s.reference : s.description,
+            { color: c.mueenDim },
+          ]}
         >
-          {source.quote}
-        </AppText>
-      ) : null}
-      {source.translation ? (
-        <AppText role="body" style={[s.translation, { color: c.textMuted }]}>
-          {source.translation}
-        </AppText>
-      ) : null}
-      {source.attribution || source.grade ? (
-        <View style={s.gradeRow}>
-          {source.grade ? (
-            <View style={[s.grade, { backgroundColor: c.mueenTile }]}>
-              <Ionicons name="checkmark" size={12} color={c.mueen} />
-              <Text style={[s.gradeText, { color: c.mueen }]}>{t(`grade.${source.grade}`)}</Text>
-            </View>
-          ) : null}
-          {source.attribution ? (
-            <Text style={[s.attribution, { color: c.textDim }]}>{source.attribution}</Text>
-          ) : null}
-        </View>
+          {referenceLine}
+        </Text>
       ) : null}
     </View>
   );
@@ -90,18 +113,29 @@ export function MueenCitationsSheet({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sources = paragraph?.sources ?? [];
+  const numbers = sourceNumbers(sources);
+  // Toasts float just above the sheet, over the chat (screen 26).
+  const [sheetHeight, setSheetHeight] = useState(360);
 
   return (
-    <BottomSheetModal visible={!!paragraph} onClose={onClose}>
+    <BottomSheetModal
+      visible={!!paragraph}
+      onClose={onClose}
+      surfaceColor={c.mueenSheet}
+      overlay={<ModalToast />}
+    >
       {({ close }) => (
-        <View style={[s.body, { paddingBottom: Math.max(insets.bottom, space.base) }]}>
+        <View
+          style={[s.body, { paddingBottom: Math.max(insets.bottom, space.base) }]}
+          onLayout={(e) => setSheetHeight(Math.round(e.nativeEvent.layout.height) + 40)}
+        >
           <View style={s.header}>
             <View style={s.titleWrap}>
-              <AppText role="headline" style={[s.title, { color: c.text }]}>
+              <AppText role="title3" style={[s.title, { color: c.text }]}>
                 {t("citations.title")}
               </AppText>
-              <View style={[s.count, { backgroundColor: c.mueenChip }]}>
-                <Text style={[s.countText, { color: c.textMuted }]}>{fmt.number(sources.length)}</Text>
+              <View style={[s.count, { backgroundColor: c.mueenDisabledBg }]}>
+                <Text style={[s.countText, { color: c.mueenMuted }]}>{fmt.number(sources.length)}</Text>
               </View>
             </View>
             <Pressable
@@ -119,14 +153,15 @@ export function MueenCitationsSheet({
             contentContainerStyle={s.list}
             showsVerticalScrollIndicator={false}
           >
-            {sources.map((source) => (
-              <SourceCard key={source.id} source={source} />
+            {/* Listed in the order the text cites them (numberCitations). */}
+            {sources.map((source, i) => (
+              <SourceCard key={source.id} source={source} number={numbers[i]} toastOffset={sheetHeight} />
             ))}
           </ScrollView>
 
           <View style={s.footnote}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={c.textDim} />
-            <Text style={[s.footnoteText, { color: c.textDim }]}>{t("citations.footnote")}</Text>
+            <Ionicons name="shield-checkmark-outline" size={12} color={c.mueenDim} />
+            <Text style={[s.footnoteText, { color: c.mueenDim }]}>{t("citations.footnote")}</Text>
           </View>
         </View>
       )}
@@ -138,7 +173,7 @@ const s = StyleSheet.create({
   body: { paddingHorizontal: space.base, gap: 14 },
   header: { flexDirection: "row", alignItems: "center", gap: space.sm },
   titleWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.sm },
-  title: { fontWeight: "600", textAlign: "auto" },
+  title: { textAlign: "auto" },
   count: {
     height: 20,
     minWidth: 20,
@@ -152,23 +187,13 @@ const s = StyleSheet.create({
   list: { gap: space.md },
   card: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 10, borderCurve: "continuous" },
   sourceRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  collection: { ...typography.subhead, flex: 1, textAlign: "auto" },
-  openBtn: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  quote: { textAlign: "auto", writingDirection: "auto" },
-  quoteWeight: { fontWeight: "500" },
-  bookTitle: { fontWeight: "600" },
-  translation: { textAlign: "auto", writingDirection: "auto" },
-  gradeRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm },
-  grade: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.xs,
-    height: 23,
-    paddingHorizontal: 10,
-    borderRadius: radius.full,
-  },
-  gradeText: { ...typography.caption, fontWeight: "600" },
-  attribution: { ...typography.footnote, fontWeight: "400", flexShrink: 1, textAlign: "auto" },
+  label: { ...typography.subhead, flex: 1, textAlign: "auto" },
+  openBtn: { width: 36, height: 36, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+  // Verbatim ayah: larger, airy line height (Spec · Source cards · Quran).
+  ayah: { ...typography.title2, fontWeight: "600", lineHeight: 38, textAlign: "auto", writingDirection: "rtl" },
+  quote: { fontWeight: "600", textAlign: "auto", writingDirection: "auto" },
+  reference: { ...typography.footnote, textAlign: "auto" },
+  description: { ...typography.subhead, textAlign: "auto" },
   footnote: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   footnoteText: { ...typography.caption, fontWeight: "400" },
   pressed: { opacity: 0.6 },

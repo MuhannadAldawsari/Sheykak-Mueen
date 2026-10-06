@@ -1,14 +1,15 @@
 /**
- * Selection mode chrome (Figma 03 · Select messages): the header that replaces
- * the chat header ("رسالتان محددتان" + ✕) and the bottom bar that replaces
- * the composer (draft for the selection, or for the whole conversation).
+ * Selection mode chrome (Figma v2 · 03 · Select messages): a header that keeps
+ * the asker's identity (avatar, name, last seen) with ✕ to leave selection,
+ * and a bottom bar that replaces the composer — «صياغة مسودة مع مُعين (n)»
+ * and a shortcut to draft from the whole conversation.
  */
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AnimatedPressable } from "@/components/ui/AnimatedPressable";
-import { AppText } from "@/components/ui/AppText";
+import { UserAvatar } from "@/components/UserAvatar";
 import { useTheme } from "@/hooks/use-theme";
 import { useT } from "@/i18n/useT";
 import { useFormatter } from "@/i18n/useFormatter";
@@ -17,12 +18,34 @@ import { radius, space } from "@/constants/layout";
 import { typography } from "@/constants/typography";
 import { MueenIcon } from "./MueenIcon";
 
-export function MueenSelectionHeader({ count, onCancel }: { count: number; onCancel: () => void }) {
+export interface SelectionPartner {
+  name?: string | null;
+  avatarUrl?: string | null;
+  status?: string | null;
+}
+
+export function MueenSelectionHeader({
+  partner,
+  onCancel,
+}: {
+  partner: SelectionPartner;
+  onCancel: () => void;
+}) {
   const c = useTheme();
   const { t } = useT("mueen");
-  const fmt = useFormatter();
   return (
-    <View style={[s.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+    <View style={[s.header, { backgroundColor: c.mueenSheet }]}>
+      <UserAvatar uri={partner.avatarUrl} size={42} accessibilityLabel={partner.name ?? undefined} />
+      <View style={s.identity}>
+        <Text numberOfLines={1} style={[s.name, { color: c.text }]}>
+          {partner.name ?? ""}
+        </Text>
+        {partner.status ? (
+          <Text numberOfLines={1} style={[s.status, { color: c.mueenDim }]}>
+            {partner.status}
+          </Text>
+        ) : null}
+      </View>
       <Pressable
         onPress={() => {
           haptics.tap();
@@ -32,14 +55,8 @@ export function MueenSelectionHeader({ count, onCancel }: { count: number; onCan
         accessibilityLabel={t("select.cancel")}
         style={({ pressed }) => [s.cancel, pressed && s.pressed]}
       >
-        <Ionicons name="close" size={22} color={c.text} />
+        <Ionicons name="close" size={24} color={c.text} />
       </Pressable>
-      <View style={s.titleWrap}>
-        <AppText role="headline" style={[s.title, { color: c.text }]} accessibilityRole="header">
-          {t("select.count", { count, n: fmt.number(count) })}
-        </AppText>
-        <Text style={[s.subtitle, { color: c.textDim }]}>{t("select.subtitle")}</Text>
-      </View>
     </View>
   );
 }
@@ -62,7 +79,11 @@ export function MueenSelectionFooter({
     <View
       style={[
         s.footer,
-        { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, space.md) },
+        {
+          backgroundColor: c.mueenSheet,
+          borderTopColor: c.mueenLine,
+          paddingBottom: Math.max(insets.bottom, space.md),
+        },
       ]}
     >
       <AnimatedPressable
@@ -71,10 +92,10 @@ export function MueenSelectionFooter({
         haptic="light"
         accessibilityRole="button"
         accessibilityState={{ disabled }}
-        style={[s.cta, { backgroundColor: disabled ? c.mueenChip : c.mueen }]}
+        style={[s.cta, { backgroundColor: disabled ? c.mueenDisabledBg : c.mueen }]}
       >
-        <MueenIcon size={16} color={disabled ? c.textDim : c.inkOnBrand} />
-        <Text style={[s.ctaText, { color: disabled ? c.textDim : c.inkOnBrand }]}>
+        <MueenIcon size={18} color={disabled ? c.mueenDisabledText : c.inkOnBrand} />
+        <Text style={[s.ctaText, { color: disabled ? c.mueenDisabledText : c.inkOnBrand }]}>
           {t("select.cta", { n: fmt.number(count) })}
         </Text>
       </AnimatedPressable>
@@ -86,7 +107,7 @@ export function MueenSelectionFooter({
         accessibilityRole="button"
         style={({ pressed }) => [s.link, pressed && s.pressed]}
       >
-        <Text style={[s.linkText, { color: c.textMuted }]}>{t("select.whole")}</Text>
+        <Text style={[s.linkText, { color: c.mueenMuted }]}>{t("select.whole")}</Text>
       </Pressable>
     </View>
   );
@@ -97,20 +118,19 @@ const s = StyleSheet.create({
     height: 64,
     flexDirection: "row",
     alignItems: "center",
-    gap: space.sm,
-    paddingStart: space.sm,
-    paddingEnd: space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+    paddingStart: space.md,
+    paddingEnd: space.sm,
   },
-  cancel: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  titleWrap: { flex: 1, gap: 1 },
-  title: { fontWeight: "700", textAlign: "auto" },
-  subtitle: { ...typography.footnote, fontWeight: "400", textAlign: "auto" },
+  identity: { flex: 1, gap: 1 },
+  name: { ...typography.title3, fontWeight: "700", textAlign: "auto", writingDirection: "auto" },
+  status: { ...typography.footnote, fontWeight: "400", textAlign: "auto" },
+  cancel: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.full },
   footer: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     paddingTop: space.md,
     paddingHorizontal: space.base,
-    gap: 10,
+    gap: 6,
     alignItems: "center",
   },
   cta: {
@@ -123,7 +143,7 @@ const s = StyleSheet.create({
     gap: space.sm,
   },
   ctaText: { ...typography.headline },
-  link: { height: 32, justifyContent: "center", paddingHorizontal: space.sm, borderRadius: radius.sm },
-  linkText: { ...typography.subhead, fontWeight: "500" },
+  link: { height: 40, justifyContent: "center", paddingHorizontal: space.sm, borderRadius: radius.sm },
+  linkText: { ...typography.callout, fontWeight: "500" },
   pressed: { opacity: 0.6 },
 });

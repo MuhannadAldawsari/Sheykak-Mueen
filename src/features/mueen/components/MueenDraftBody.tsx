@@ -1,15 +1,12 @@
 /**
- * The bordered, scrollable draft box of the Mu'een sheet: loading skeleton,
- * error / empty / no-draft states, or the editable paragraphs with their citation
- * pills (under a review banner when the service flags the draft).
- * Each paragraph is its own TextInput, so an edit never detaches a sentence
- * from its sources ("المراجع تبقى مرتبطة بجملها").
+ * The bordered, scrollable draft box of the Mu'een sheet (Figma v2 · 06 / 07 /
+ * 14): a skeleton while drafting or regenerating, otherwise the editable
+ * paragraphs with their citation pills. Each paragraph is its own TextInput,
+ * so an edit never detaches a sentence from its sources; a pill is locked
+ * and disappears with its sentence (Spec · Pill editing).
  */
-import React from "react";
-import { ScrollView, StyleSheet, TextInput, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { AppText } from "@/components/ui/AppText";
-import { AppButton } from "@/components/ui/AppButton";
+import React, { useState } from "react";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SkeletonBar } from "@/components/SkeletonLoader";
 import { useTheme } from "@/hooks/use-theme";
 import { useT } from "@/i18n/useT";
@@ -18,127 +15,94 @@ import { typography } from "@/constants/typography";
 import { MueenSourceChip } from "./MueenSourceChip";
 import type { MueenParagraph } from "../types";
 
-const SKELETON_LINES = ["100%", "92%", "70%", "100%", "84%", "96%", "58%"];
+const SKELETON_LINES = ["100%", "92%", "70%", "100%", "84%", "96%", "58%", "100%", "76%"];
+const LINE_HEIGHT = 26;
+/** Covers the input's font padding, so the last line is never shaved. */
+const MEASURE_SLACK = 4;
+const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
+
+/**
+ * One editable paragraph that always shows in full. Android neither grows a
+ * multiline TextInput (scrollEnabled off) past its first layout nor reports its
+ * content height reliably, so long paragraphs clipped and scrolled inside
+ * themselves. An invisible Text with the same text, style and width measures
+ * the real height; the input takes it and the sheet's ScrollView is the only
+ * scroll.
+ */
+function ParagraphInput({ value, style, ...rest }: React.ComponentProps<typeof TextInput>) {
+  const [height, setHeight] = useState<number | null>(null);
+  return (
+    <View>
+      <View pointerEvents="none" style={s.measure} importantForAccessibility="no-hide-descendants">
+        <Text
+          style={[style, s.measureText]}
+          onLayout={(e) => {
+            const next = Math.max(LINE_HEIGHT, Math.ceil(e.nativeEvent.layout.height) + MEASURE_SLACK);
+            if (next !== height) setHeight(next);
+          }}
+        >
+          {/* The zero-width space keeps a trailing empty line (Enter at the end). */}
+          {`${value ?? ""}${ZERO_WIDTH_SPACE}`}
+        </Text>
+      </View>
+      <TextInput {...rest} value={value} multiline scrollEnabled={false} style={[style, height !== null && { height }]} />
+    </View>
+  );
+}
 
 export function MueenDraftBody({
   paragraphs,
   loading,
-  error,
-  empty,
-  notice,
-  flagged,
   activeParagraphId,
   onChangeText,
   onOpenSources,
-  onRetry,
 }: {
   paragraphs: MueenParagraph[] | null;
   loading: boolean;
-  error: boolean;
-  empty: boolean;
-  /** The service's note for the scholar (Arabic), if any. */
-  notice: string | null;
-  /** Show the note as a banner over the paragraphs (unverified draft or a personal case). */
-  flagged: boolean;
   activeParagraphId: string | null;
   onChangeText: (paragraphId: string, text: string) => void;
   onOpenSources: (paragraph: MueenParagraph) => void;
-  onRetry: () => void;
 }) {
   const c = useTheme();
   const { t } = useT("mueen");
 
-  let content: React.ReactNode;
-  if (loading) {
-    content = (
-      <View style={s.skeleton} accessibilityLabel={t("sheet.loading")} accessible>
-        <AppText role="footnote" style={[s.status, { color: c.textDim }]}>
-          {t("sheet.loading")}
-        </AppText>
-        {SKELETON_LINES.map((w, i) => (
-          <SkeletonBar key={i} width={w} height={14} delay={i * 60} />
-        ))}
-      </View>
-    );
-  } else if (empty) {
-    content = (
-      <AppText role="subhead" style={[s.status, { color: c.textMuted }]}>
-        {t("sheet.empty")}
-      </AppText>
-    );
-  } else if (error || !paragraphs) {
-    content = (
-      <View style={s.errorWrap}>
-        <AppText role="subhead" style={[s.status, { color: c.textMuted }]}>
-          {t("sheet.error")}
-        </AppText>
-        <AppButton label={t("sheet.retry")} variant="secondary" size="sm" onPress={onRetry} />
-      </View>
-    );
-  } else if (paragraphs.length === 0) {
-    // The service drafted nothing (no approved evidence, or out of scope): say why.
-    content = (
-      <View style={s.errorWrap}>
-        <AppText role="subhead" style={[s.status, { color: c.textMuted }]}>
-          {t("sheet.noDraft")}
-        </AppText>
-        {notice ? (
-          <AppText role="footnote" style={[s.status, { color: c.textDim }]}>
-            {notice}
-          </AppText>
-        ) : null}
-      </View>
-    );
-  } else {
-    const banner =
-      flagged && notice ? (
-        <View key="notice" style={[s.banner, { backgroundColor: c.mueenTint, borderColor: c.mueenBorder }]}>
-          <View style={s.bannerTitle}>
-            <Ionicons name="alert-circle-outline" size={16} color={c.mueen} />
-            <AppText role="footnote" style={[s.bannerHeading, { color: c.mueen }]}>
-              {t("sheet.reviewNotice")}
-            </AppText>
-          </View>
-          <AppText role="footnote" style={[s.bannerText, { color: c.text }]}>
-            {notice}
-          </AppText>
-        </View>
-      ) : null;
-    const items = paragraphs.map((p, index) => (
-      <View key={p.id} style={s.paragraph}>
-        <TextInput
-          value={p.text}
-          onChangeText={(text) => onChangeText(p.id, text)}
-          multiline
-          scrollEnabled={false}
-          accessibilityLabel={t("sheet.paragraphA11y", { n: index + 1 })}
-          selectionColor={c.mueen}
-          style={[
-            s.input,
-            { color: c.text },
-            activeParagraphId === p.id && { backgroundColor: c.mueenHighlight },
-          ]}
-        />
-        {p.sources.length > 0 ? (
-          <MueenSourceChip
-            sources={p.sources}
-            active={activeParagraphId === p.id}
-            onPress={() => onOpenSources(p)}
-          />
-        ) : null}
-      </View>
-    ));
-    content = banner ? [banner, ...items] : items;
-  }
-
   return (
-    <View style={[s.box, { backgroundColor: c.backgroundAlt, borderColor: c.mueenBorder }]}>
+    <View style={[s.box, { backgroundColor: c.mueenField, borderColor: c.mueen }]}>
       <ScrollView
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {content}
+        {loading || !paragraphs ? (
+          <View style={s.skeleton} accessible accessibilityLabel={t("sheet.loading")}>
+            {SKELETON_LINES.map((w, i) => (
+              <SkeletonBar key={i} width={w} height={14} delay={i * 60} />
+            ))}
+          </View>
+        ) : (
+          paragraphs.map((p, index) => (
+            <View key={p.id} style={s.paragraph}>
+              <ParagraphInput
+                value={p.text}
+                onChangeText={(text) => onChangeText(p.id, text)}
+                accessibilityLabel={t("sheet.paragraphA11y", { n: index + 1 })}
+                selectionColor={c.mueen}
+                style={[
+                  s.input,
+                  { color: c.text },
+                  activeParagraphId === p.id && { backgroundColor: c.mueenHighlight },
+                ]}
+              />
+              {p.sources.length > 0 && p.text.trim() ? (
+                <MueenSourceChip
+                  sources={p.sources}
+                  active={activeParagraphId === p.id}
+                  onPress={() => onOpenSources(p)}
+                />
+              ) : null}
+            </View>
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -150,7 +114,7 @@ const s = StyleSheet.create({
   paragraph: { gap: 6 },
   input: {
     ...typography.body,
-    lineHeight: 26,
+    lineHeight: LINE_HEIGHT,
     // "left" = start: forced RTL flips it (TextInput has no "auto").
     textAlign: "left",
     writingDirection: "auto",
@@ -160,11 +124,7 @@ const s = StyleSheet.create({
     marginHorizontal: -2,
     borderRadius: 4,
   },
-  skeleton: { gap: 10 },
-  status: { textAlign: "center" },
-  errorWrap: { alignItems: "center", gap: space.md, paddingVertical: space.lg },
-  banner: { borderWidth: 1, borderRadius: radius.md, padding: space.md, gap: 6 },
-  bannerTitle: { flexDirection: "row", alignItems: "center", gap: 6 },
-  bannerHeading: { fontWeight: "600", textAlign: "auto" },
-  bannerText: { textAlign: "auto", writingDirection: "auto" },
+  skeleton: { gap: 12 },
+  measure: { position: "absolute", top: 0, start: 0, end: 0, opacity: 0 },
+  measureText: { backgroundColor: "transparent" },
 });

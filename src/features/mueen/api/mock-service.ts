@@ -2,14 +2,18 @@
  * Stand-in for the Mu'een RAG backend while the model is being trained.
  * Returns the Figma sample answer after a short "thinking" delay. For a
  * selected-messages draft it keeps only the paragraphs whose topic appears
- * in the picked messages, so the scoped flow (screen 05) behaves sensibly.
+ * in the picked messages; when none does (or a picked message contains
+ * «اختبار» / "test", to demo screen 18) it answers "no_sources". Offline,
+ * it fails like the real endpoint would (screen 13).
  */
+import { isOnline } from "@/lib/network";
 import sample from "./mock-draft.json";
-import type {
-  MueenDraft,
-  MueenDraftRequest,
-  MueenParagraph,
-  MueenService,
+import {
+  MueenDraftError,
+  type MueenDraft,
+  type MueenDraftRequest,
+  type MueenParagraph,
+  type MueenService,
 } from "../types";
 
 const THINKING_MS = 1400;
@@ -23,6 +27,9 @@ const TOPICS: Record<string, RegExp> = {
   p5: /مريم|أمه|أمّه|mary|mother/i,
 };
 
+/** Demo trigger for the "not enough approved sources" state. */
+const NO_SOURCES_TRIGGER = /اختبار|\btest\b/i;
+
 const PARAGRAPHS = sample.paragraphs as MueenParagraph[];
 
 let draftSeq = 0;
@@ -34,21 +41,24 @@ function pickParagraphs(request: MueenDraftRequest): MueenParagraph[] {
     .filter((m) => picked.has(m.id))
     .map((m) => m.text)
     .join(" ");
+  if (NO_SOURCES_TRIGGER.test(text)) return [];
   const relevant = PARAGRAPHS.filter((p) => TOPICS[p.id]?.test(text));
-  const chosen = relevant.length > 0 ? relevant : PARAGRAPHS.slice(0, 2);
-  return chosen.map((p, i) =>
+  return relevant.map((p, i) =>
     i === 0 && p.id !== "p1" ? { ...p, text: sample.selectedIntro + p.text } : p,
   );
 }
 
 export const mockMueenService: MueenService = {
   async generateDraft(request) {
+    if (!(await isOnline())) throw new MueenDraftError("offline");
     await new Promise((resolve) => setTimeout(resolve, THINKING_MS));
+    const paragraphs = pickParagraphs(request).map((p) => ({ ...p, sources: [...p.sources] }));
     const draft: MueenDraft = {
       id: `mock-draft-${Date.now()}-${++draftSeq}`,
       questionId: request.questionId,
       scope: request.scope,
-      paragraphs: pickParagraphs(request).map((p) => ({ ...p, sources: [...p.sources] })),
+      status: paragraphs.length > 0 ? "ok" : "no_sources",
+      paragraphs,
       textMessageCount:
         request.scope.kind === "selected"
           ? request.scope.messageIds.length
