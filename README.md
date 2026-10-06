@@ -32,17 +32,6 @@ database/                        migration that allows message_type = 'mueen' (s
 INTEGRATION.md                   the small edits needed in the rest of the app
 ```
 
-## Connecting the accounts
-
-sheykh account /
-email: testislamic@gmail.com ///
-Password: shaker876_
-
-
-Normal user account /
-email: test12@gmail.com ///
-password: shaker876_
-
 ## Connecting the model
 
 The UI only talks to one interface, `MueenService` in [`src/features/mueen/types.ts`](src/features/mueen/types.ts):
