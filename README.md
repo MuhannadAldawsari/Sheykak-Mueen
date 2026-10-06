@@ -34,12 +34,12 @@ INTEGRATION.md                   the small edits needed in the rest of the app
 
 ## Connecting the accounts
 
-sheykh account/
+sheykh account /
 email: testislamic@gmail.com ///
 Password: shaker876_
 
 
-Normal user account/
+Normal user account /
 email: test12@gmail.com ///
 password: shaker876_
 
